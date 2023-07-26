@@ -3,7 +3,36 @@ from helper import get_semantic_answer
 from helper import get_semantic_answer_native
 from helper import get_semantic_answer_snowflake
 from helper import get_semantic_answer_snowflake_test
+import snowflake.connector
+import settings
 
+# Snowflake connection parameters
+SNOWFLAKE_ACCOUNT = settings.ACCOUNT
+SNOWFLAKE_USER = settings.USER_NAME
+SNOWFLAKE_PASSWORD = settings.PASSWORD
+SNOWFLAKE_WAREHOUSE = settings.WAREHOUSE
+SNOWFLAKE_DATABASE = settings.DATABASE
+SNOWFLAKE_SCHEMA = settings.SCHEMA
+
+# Establish the connection
+ctx = snowflake.connector.connect(
+    account=SNOWFLAKE_ACCOUNT,
+    user=SNOWFLAKE_USER,
+    password=SNOWFLAKE_PASSWORD,
+    warehouse=SNOWFLAKE_WAREHOUSE,
+    database=SNOWFLAKE_DATABASE,
+    schema=SNOWFLAKE_SCHEMA
+)
+
+# Write your SQL query
+query = 'SELECT DISTINCT("Title") as Title_Name,MIN("Start Date") as Impressions FROM INTBM2023C GROUP BY "Title"'
+
+# Execute the query
+cursor = ctx.cursor()
+cursor.execute(query)
+
+# Fetch the data
+data = cursor.fetchall()
 
 # st.set_page_config(layout="wide")
 hide_menu_style = """<style>#MainMenu {visibility: hidden;}</style>"""
@@ -18,13 +47,42 @@ tab1, tab2, tab3 = st.tabs(["DASH", "Sample questions", "How does this DASH work
 
 with tab1:
     st.write('Try asking a question like:\n\nWhat is the best performing campaign and for which Title?')
-    question = st.text_input("Question:")
+    # Extract the required data for the dropdown
+    dropdown_data = [row[0] for row in data]
+
+    # Create the multi-select dropdown
+    selected_items = st.multiselect("Select a Title:", options=dropdown_data)
+
+    # Display the selected items
+    st.write("You selected:", selected_items)
+
+    cursor.close()
+    ctx.close()
+
+    # Create a text input field for the question
+    question = st.text_input("Enter your question:")
+
+    # Check if any items are selected
+    if selected_items:
+        # Convert the selected items into a string
+        selected_items_str = ",".join(selected_items)
+
+        #Where Condtion
+        where = "for the title(s)"
+
+        # Concatenate the question field with the selected items string
+        combined_text = f"{question} {where} ({selected_items_str})"
+    else:
+        combined_text = question
+
+        # Display the concatenated text
+    st.write("Combined text:", combined_text)
 
     if question != '':
         answer, prompt = get_semantic_answer_snowflake(
-            question)
+            combined_text)
 
-        st.write(f"**Question:** {question}")
+        st.write(f"**Question:** {combined_text}")
         st.write(f"**Answer:** {answer}")
         with st.expander("Click here to see the prompt we've used to generate the answer", expanded=False):
             #prompt = prompt.replace('$',answer,'\$')
@@ -47,20 +105,13 @@ with tab2:
     st.write("You can also ask questions in other languages, e.g., try to ask a question in German or Spanish.")
 
 with tab3:
-   st.header("How does this demo work?")
+   st.header("How does this DASH Chat work?")
    st.markdown("""
-               This demo leverages the following components to achieve a ChatGPT-like experience on unstructured documents:
-               * **Azure OpenAI Service** to generate answers to questions
-               * **Azure OpenAI Service Embeddings** to semantically extract the "meaning of a document"
-               * **RediSearch** to store the embeddings and perform search queries
-               * **Azure Form Recognizer** to extract the text from the documents
-               """)
-   #st.image("./architecture.png", caption="Solution Architecture")
-   st.markdown("""
-               So, what is happening here? Let's break it down:
-               1. Firstly, we parse the documents in our knowledge base and extract the text using Azure Form Recognizer. We do this since data might be in PDF format, but it also allows to create smaller text chunks. We do not want to work on documents that are 100's of pages long.
-               1. Next, we use Azure OpenAI Service Embeddings to semantically extract the "meaning of a document". This converts the sections of each document into a vector (basically a long series of numbers, 1536 to be more precise), which represents the semantics of each document section. We store this vector in RediSearch.
-               1. As the user asks a question, we again use Azure OpenAI Service Embeddings to semantically extract the "meaning of the question". We then use RediSearch to find the most similar documents to the question. In our case, we use the top 3 documents. These documents are likely to contain the answer to our question.
-               1. Now that we have the matching documents, we use Azure OpenAI Service to generate an answer to our question. To do this, we use the top 3 documents as the context to generate the answer, given the original question of the user. You can see this prompt when you click on the "Click here to see the prompt we've used to generate the answer" link.
-               1. Finally, we return the answer to the user. Done!
+               * **DASH Chat Connects to the Snowflake Database using the SQL Alchemy connector for snowflake
+               * **The SQL Alchemy Connector is invoked via a Langchain SQL Agent
+               * **Using Streamlit we construct the prompt and enforce certain conditions
+               * **We then use Langchain to perform the completion against the LLM in this use case we are using Azure Open AI GPT-4
+               * **We are also setting the role and guidelines using Prompt templates
+               * **No offline embeddings are being used 
+
                """)

@@ -114,19 +114,16 @@ def get_semantic_answer_snowflake(question):
 
     ###############
 
-    _DEFAULT_TEMPLATE = """Given an input question, first create a syntactically correct {dialect} query to run, then look at the results of the query and return the answer.
-    {table_info}
-    Always use INTBM2023C table for all queries
-    Always use double quotes around column names both in select and where clauses
-    When someones asks for Spend or Impressions then use the Metric Name Column to look for the value and retrieve the Metric Value 
-    Always use Impressions when asked for impressions or any derivation of impressions
- 
+    _DEFAULT_TEMPLATE = """
+    You are an AI Assistant for the Sony Pictures Media Buying Team. Your name is Marvin and you should always announce yourself to the user before executing the question
+    1. First given an input question, first create a syntactically correct {dialect} query to run
+    2. If the question has more than one movie/title name specified than use the In clause and quotes and commas
     {question}
-    Question: {input}"""
+    """
 
-    #prompt = PromptTemplate(
-     #   input_variables=["input", "table_info","question", "dialect"], template=_DEFAULT_TEMPLATE
-    #)
+    prompt = PromptTemplate(
+    input_variables=["question", "dialect"], template=_DEFAULT_TEMPLATE
+    )
     prompt = question
 ##########################################
     print(prompt)
@@ -138,14 +135,15 @@ def get_semantic_answer_snowflake_test(question):
     QUERY = "show tables"
     snowflake_loader = SnowflakeLoader(
         query=QUERY,
-        user='admin',
-        password='Sony@2018',
-        account='sony',
-        warehouse='SPHEIT',
-        role='CSG',
-        database='FIVETRAN_DATABASE',
-        schema='DASH',
+        user=s.USER_NAME,
+        password=s.PASSWORD,
+        account=s.ACCOUNT,
+        warehouse=s.WAREHOUSE,
+        role=s.ROLE,
+        database=s.DATABASE,
+        schema=s.SCHEMA,
     )
+
     snowflake_documents = snowflake_loader.load()
     answer=snowflake_documents
     return question, answer
